@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+#Get accurate available memory. 
+#
+
+function get_meminfo()
+{
+   grep -w $1 /proc/meminfo | awk -F' ' '{print $2}'
+}
+function show_meminfo()
+{
+   printf "%s\t%10d kB\n" "$1" "$2"
+}
+
+PAGE_SIZE=4 #kB, for x86 
+function get_shmem_from_ipcs()
+{
+   local _shm=0
+   _shm=$(ipcs -m -u | grep 'pages resident' | awk -F' ' '{print $3}')
+   echo $((_shm * PAGE_SIZE))
+}
+function get_tmpfs_from_df()
+{
+   local _size=""
+   _size=$(df -k | awk -F' ' 'BEGIN{total=0} {if ($1 == "tmpfs" || $1 == "devtmpfs" || $1 == "shm")total+=$3}END{print total}')
+   echo $_size 
+}
+
+#inode, dentry and buffer_head is reclaimable 
+function get_slab_reclaimable_from_slabinfo()
+{
+   local _size=""
+   _size=$(awk -F' ' 'BEGIN{total=0} {if ($1~/inode/ || $1~"dentry" || $1 == "buffer_head")total+=($3 * $4)}END{printf "%d\n", total / 1024}' /proc/slabinfo)
+   [ -z "$_size" ] && _size=0
+   echo $_size 
+}
+
+free=$(get_meminfo MemFree)
+total=$(get_meminfo MemTotal) 
+cached=$(get_meminfo Cached)
+buffer=$(get_meminfo Buffers)
+swapcached=$(get_meminfo SwapCached)
+shmem=$(get_meminfo Shmem)
+slab_reclaimable=$(get_meminfo SReclaimable)
+nfs_unstable=$(get_meminfo NFS_Unstable)
+
+#the kernel does not support, no 'Shmem' field in /proc/meminfo, we use ipc and df.
+if [ -z "$shmem" ] ; then
+   shmem=$(( $(get_shmem_from_ipcs) + $(get_tmpfs_from_df) ))
+fi
+
+#the kernel does not support, no 'SReclaimable' field in /proc/meminfo, we use /proc/slabinfo.
+if [ -z "$slab_reclaimable" ]; then
+   slab_reclaimable=$(get_slab_reclaimable_from_slabinfo)
+fi
+
+#the kernel does not support, no 'NFS_Unstable' field in /proc/meminfo, we use null. :)
+if [ -z "$nfs_unstable" ]; then 
+   nfs_unstable=0
+fi
+
+
+reclaimable=$((cached + buffer + slab_reclaimable + swapcached + nfs_unstable - shmem))
+available=$((free + reclaimable))
+show_meminfo "Total: "            "$total"
+show_meminfo "Free: "             "$free"
+show_meminfo "Reclaimable:"       "$reclaimable"
+show_meminfo "Available: "        "$available"
