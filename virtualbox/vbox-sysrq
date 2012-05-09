@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-
+# send sysrq key to virtual guest os
+# usage: vbox-sysrq vmname key
+# example: vbox-sysrq myvm01 t ###will send sysrq-m to guest, trigger a trace show
 import sys
 import commands
 
