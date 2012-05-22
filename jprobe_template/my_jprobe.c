@@ -2,13 +2,11 @@
 #include <linux/module.h>
 #include <linux/kprobes.h>
 
-static long my_hook(unsigned long clone_flags, unsigned long stack_start,
-	      struct pt_regs *regs, unsigned long stack_size,
-	      int __user *parent_tidptr, int __user *child_tidptr)
+
+
+int my_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
-	printk(KERN_INFO "jprobe: clone_flags = 0x%lx, stack_size = 0x%lx,"
-			" regs = 0x%p\n",
-	       clone_flags, stack_size, regs);
+        printk("%d %lx\n", current->pid, sock);
 
         dump_stack();
 
@@ -17,7 +15,7 @@ static long my_hook(unsigned long clone_flags, unsigned long stack_start,
 }
 
 static struct jprobe my_jprobe = {
-	.entry			= my_hook,
+	.entry			= my_inet_bind,
 	.kp = {
 		.symbol_name	= "inet_bind",
 	},
